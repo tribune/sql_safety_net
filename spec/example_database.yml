@@ -1,0 +1,14 @@
+# Copy this file to database.yml to run the test with connection settings for you environment.
+# You must create the database in both mysql and postgres.
+
+mysql:
+  adapter: mysql
+  username: root
+  password: ""
+  database: sql_safety_net_test
+
+postgresql:
+  adapter: postgresql
+  username: postgres
+  password: postgres
+  database: sql_safety_net_test

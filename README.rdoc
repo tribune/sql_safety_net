@@ -1,0 +1,19 @@
+= SQL Safety Net
+
+This gem provides hooks into ActiveRecord to analyze SQL queries. It can be very useful in keeping an eye on tuning your code before it becomes a problem. ActiveRecord can make it very easy to send excessive load to the database.
+
+With this gem enabled, HTML pages which have bad queries or too many queries on them will have a debug div added to the HTML with information about the queries. If you see this in development mode, you should investigate and come up with ways to reduce the load.
+
+== Example
+
+Add this code to an initializer:
+
+  SqlSafetyNet.init_rails
+
+You can pass a block to this method which will yield a configuration object you can use to set threshold parameters on. See SqlSafetyNet::Configuration for all options. For example:
+
+  SqlSafetyNet.init_rails do |config|
+    config.query_limit = 20
+  end
+
+If you need finer control over how the gem is set up, or you are using it in a non-Rails environment, you can initialize it manually. You will need to call <tt>SqlSafetyNet::Configuration.enable_on</tt> with the ActiveRecord connection object and you will need to add SqlSafetyNet::RackHandler to the Rack middleware stack.
