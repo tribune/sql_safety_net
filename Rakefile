@@ -18,12 +18,12 @@ end
 begin
   require 'jeweler'
   Jeweler::Tasks.new do |gem|
-    gem.name = "tribune-sql_safety_net"
+    gem.name = "sql_safety_net"
     gem.summary = %Q{Debug SQL statements in ActiveRecord}
     gem.description = %Q{Debug SQL statements in ActiveRecord by displaying warnings on bad queries.}
     gem.authors = ["Brian Durand"]
     gem.email = ["bdurand@tribune.com"]
-    gem.files = FileList["lib/**/*", "spec/**/*", "README.rdoc", "Rakefile", "TRIBUNE_CODE"].to_a
+    gem.files = FileList["lib/**/*", "spec/**/*", "README.rdoc", "Rakefile", "License.txt"].to_a
     gem.has_rdoc = true
     gem.rdoc_options << '--line-numbers' << '--inline-source' << '--main' << 'README.rdoc'
     gem.extra_rdoc_files = ["README.rdoc"]
