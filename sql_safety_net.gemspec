@@ -5,13 +5,13 @@
 
 Gem::Specification.new do |s|
   s.name = "sql_safety_net"
-  s.version = "1.1.10"
+  s.version = "1.1.11"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Brian Durand"]
-  s.date = "2012-06-05"
+  s.date = "2012-06-06"
   s.description = "Debug SQL statements in ActiveRecord by displaying warnings on bad queries."
-  s.email = ["bdurand@tribune.com"]
+  s.email = ["mdobrota@tribune.com", "ddpr@tribune.com"]
   s.extra_rdoc_files = [
     "README.rdoc"
   ]

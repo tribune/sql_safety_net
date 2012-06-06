@@ -22,7 +22,7 @@ begin
     gem.summary = %Q{Debug SQL statements in ActiveRecord}
     gem.description = %Q{Debug SQL statements in ActiveRecord by displaying warnings on bad queries.}
     gem.authors = ["Brian Durand"]
-    gem.email = ["bdurand@tribune.com"]
+    gem.email = ["mdobrota@tribune.com", "ddpr@tribune.com"]
     gem.files = FileList["lib/**/*", "spec/**/*", "README.rdoc", "Rakefile", "License.txt"].to_a
     gem.has_rdoc = true
     gem.rdoc_options << '--line-numbers' << '--inline-source' << '--main' << 'README.rdoc'
@@ -35,5 +35,6 @@ begin
     gem.add_development_dependency('pg')
     gem.add_development_dependency('sqlite3-ruby')
   end
+  Jeweler::RubygemsDotOrgTasks.new
 rescue LoadError
 end
