@@ -1,67 +1,72 @@
 require 'spec_helper'
 
 describe SqlSafetyNet::Configuration do
-
-  before :each do
-    @config = SqlSafetyNet::Configuration.new
+  
+  let(:config){ SqlSafetyNet::Configuration.new }
+  
+  describe "standard settings" do
+    it "should have a query_limit with a default of 10" do
+      config.query_limit.should == 10
+      config.query_limit = 100
+      config.query_limit.should == 100
+    end
+  
+    it "should have a returned_rows_limit with a default of 100" do
+      config.returned_rows_limit.should == 100
+      config.returned_rows_limit = 200
+      config.returned_rows_limit.should == 200
+    end
+  
+    it "should have a result_size_limit with a default of 16K" do
+      config.result_size_limit.should == 16 * 1024
+      config.result_size_limit = 10000
+      config.result_size_limit.should == 10000
+    end
+  
+    it "should have a elapsed_time_limit with a default of 300ms" do
+      config.elapsed_time_limit.should == 0.3
+      config.elapsed_time_limit = 1
+      config.elapsed_time_limit.should == 1
+    end
   end
   
-  it "should be able to set debug" do
-    @config.debug?.should == false
-    @config.debug = true
-    @config.debug?.should == true
-    @config.debug = false
-    @config.debug?.should == false
+  describe "query plan limits" do
+    it "should have a table_scan_limit with a default of 100 rows" do
+      config.table_scan_limit.should == 100
+      config.table_scan_limit = 200
+      config.table_scan_limit.should == 200
+    end
+  
+    it "should have a temporary_table_limit with a default of 100 rows" do
+      config.temporary_table_limit.should == 100
+      config.temporary_table_limit = 200
+      config.temporary_table_limit.should == 200
+    end
+  
+    it "should have a filesort_limit with a default of 100 rows" do
+      config.filesort_limit.should == 100
+      config.filesort_limit = 200
+      config.filesort_limit.should == 200
+    end
+  
+    it "should have an examined_rows_limit with a default of 5000 rows" do
+      config.examined_rows_limit.should == 5000
+      config.examined_rows_limit = 10000
+      config.examined_rows_limit.should == 10000
+    end
   end
 
-  it "should be able to set header" do
-    @config.header?.should == false
-    @config.header = true
-    @config.header?.should == true
-    @config.header = false
-    @config.header?.should == false
+  describe "debugging information" do
+    it "should have a flag to always_show debugging info" do
+      config.always_show.should == false
+      config.always_show = true
+      config.always_show.should == true
+    end
+  
+    it "should have css style" do
+      config.style.should == {}
+      config.style = {"top" => "5px", "right" => "5px"}
+      config.style.should == {"top" => "5px", "right" => "5px"}
+    end
   end
-
-  it "should be able to set table_scan_limit" do
-    @config.table_scan_limit = 500
-    @config.table_scan_limit.should == 500
-  end
-
-  it "should be able to set temporary_table_limit" do
-    @config.temporary_table_limit = 50
-    @config.temporary_table_limit.should == 50
-  end
-
-  it "should be able to set filesort_limit" do
-    @config.filesort_limit = 600
-    @config.filesort_limit.should == 600
-  end
-
-  it "should be able to set examine_rows_limit" do
-    @config.examine_rows_limit = 1000
-    @config.examine_rows_limit.should == 1000
-  end
-
-  it "should be able to set return_rows_limit" do
-    @config.return_rows_limit = 1000
-    @config.return_rows_limit.should == 1000
-  end
-
-  it "should be able to set query_limit" do
-    @config.query_limit = 20
-    @config.query_limit.should == 20
-  end
-
-  it "should be able to set time_limit" do
-    @config.time_limit = 200
-    @config.time_limit.should == 200
-  end
-
-  it "should be able to set always_show" do
-    @config.always_show = true
-    @config.always_show?.should == true
-    @config.always_show = nil
-    @config.always_show?.should == false
-  end
-
 end
