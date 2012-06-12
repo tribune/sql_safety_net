@@ -27,12 +27,10 @@ begin
     gem.has_rdoc = true
     gem.rdoc_options << '--line-numbers' << '--inline-source' << '--main' << 'README.rdoc'
     gem.extra_rdoc_files = ["README.rdoc"]
-    gem.add_dependency('activesupport')
-    gem.add_dependency('activerecord', '>= 2.2.2')
-    gem.add_dependency('actionpack')
+    gem.add_dependency('activesupport', '>= 3.0.0')
+    gem.add_dependency('activerecord', '>= 3.0.0')
+    gem.add_dependency('actionpack', '>= 3.0.0')
     gem.add_development_dependency('rspec', '>= 2.0.0')
-    gem.add_development_dependency('mysql')
-    gem.add_development_dependency('pg')
     gem.add_development_dependency('sqlite3-ruby')
   end
   Jeweler::RubygemsDotOrgTasks.new

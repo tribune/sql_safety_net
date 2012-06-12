@@ -2,142 +2,137 @@ require 'spec_helper'
 
 describe SqlSafetyNet::ConnectionAdapter do
   
-  class SqlSafetyNet::TestConnectionAdapter < ActiveRecord::ConnectionAdapters::AbstractAdapter
-    class Model
-      attr_accessor :id, :name
-      def initialize (attrs)
-        @id = attrs["id"]
-        @name = attrs["name"]
-      end
-    end
-    
-    def columns (table_name, name = nil)
-      select_rows("GET columns")
-      ["id", "name"]
-    end
-    
-    def select_rows (sql, name = nil, binds = [])
-      return [{"id" => 1, "name" => "foo"}, {"id" => 2, "name" => "bar"}]
-    end
-    
-    protected
-    
-    def analyze_query (sql, name, *args)
-      if sql.match(/table scan/i)
-        {:flags => ["table scan"]}
-      end
-    end
-    
-    def select (sql, name = nil, binds = [])
-      select_rows(sql, name).collect do |row|
-        Model.new(row)
-      end
-    end
-    
-    SqlSafetyNet.config.enable_on(self)
+  let(:connection){ SqlSafetyNet::TestModel.connection }
+  
+  before :each do
+    SqlSafetyNet::TestModel.delete_all
+    SqlSafetyNet::TestModel.create!(:name => "test", :value => 10)
   end
   
-  before(:each) do
-    SqlSafetyNet.config.debug = true
-    SqlSafetyNet::QueryAnalysis.clear
-  end
-  
-  after(:each) do
-    SqlSafetyNet::QueryAnalysis.clear
-  end
-  
-  let(:connection){ SqlSafetyNet::TestConnectionAdapter.new(:connection) }
-
-  it "should not analyze the SQL select in the columns method" do
-    connection.should_receive(:columns_without_sql_safety_net).with("table", "columns").and_return(["col1", "col2"])
-    analysis = SqlSafetyNet::QueryAnalysis.analyze do
-      connection.columns("table", "columns").should == ["col1", "col2"]
+  describe "injection" do
+    it "should analyze queries in the select_rows method" do
+      connection.should_receive(:analyze_query).with("select name, value from test_models", "SQL", []).and_yield
+      connection.select_rows("select name, value from test_models", "SQL").should == [["test", 10]]
     end
-    analysis.selects.should == 0
-  end
-
-  it "should not analyze the SQL select in the active? method" do
-    connection.should_receive(:active_without_sql_safety_net?).and_return(true)
-    analysis = SqlSafetyNet::QueryAnalysis.analyze do
-      connection.active?.should == true
+    
+    it "should analyze queries in the select method" do
+      connection.should_receive(:analyze_query).with("select name, value from test_models", "SQL", []).and_yield
+      connection.send(:select, "select name, value from test_models", "SQL").should == [{"name"=>"test", "value"=>10}]
     end
-    analysis.selects.should == 0
   end
   
-  it "should determine if a SQL statement is a select statement" do
-    connection.select_statement?("SELECT * FROM TABLE").should == true
-    connection.select_statement?(" \n SELECT * FROM TABLE").should == true
-    connection.select_statement?("Select * From Table").should == true
-    connection.select_statement?("select * from table").should == true
-    connection.select_statement?("EXECUTE SELECT * FROM TABLE").should == false
-  end
-  
-  [:select, :select_rows].each do |select_method|
-    context select_method do
-      it "should proxy the select method to the underlying adapter" do
-        connection.should_receive("#{select_method}_without_sql_safety_net").with('Select sql', 'name').and_return([:row1, :row2])
-        connection.send(select_method, 'Select sql', 'name').should == [:row1, :row2]
-      end
+  describe "analysis" do
+    it "should not blow up if there is no current QueryAnalysis" do
+      connection.select_rows("select name, value from test_models", "SQL").should == [["test", 10]]
+    end
     
-      it "should count selects" do
-        analysis = SqlSafetyNet::QueryAnalysis.analyze do
-          connection.send(select_method, 'Select * from table')
-          connection.send(select_method, 'Select * from table where whatever')
-        end
-        analysis.selects.should == 2
-      end
-    
-      it "should count rows returned" do
-        analysis = SqlSafetyNet::QueryAnalysis.analyze do
-          connection.send(select_method, 'Select * from table')
-          connection.send(select_method, 'Select * from table where whatever')
-        end
-        analysis.rows.should == 4
-      end
-  
-      it "should analyze select statements and keep track of bad queries" do
-        analysis = SqlSafetyNet::QueryAnalysis.analyze do
-          connection.send(select_method, 'Select * from table doing table scan')
-        end
-        analysis.non_flagged_queries.size.should == 0
-        analysis.flagged_queries.size.should == 1
-        analysis.flagged_queries.first[:sql].should == 'Select * from table doing table scan'
-        analysis.flagged_queries.first[:rows].should == 2
-        analysis.flagged_queries.first[:flags].should == ['table scan']
-      end
-
-      it "should analyze select statements and keep track of good queries" do
-        analysis = SqlSafetyNet::QueryAnalysis.analyze do
-          connection.send(select_method, 'Select * from table')
-        end
-        analysis.flagged_queries.size.should == 0
-        analysis.non_flagged_queries.size.should == 1
-        analysis.non_flagged_queries.first[:sql].should == 'Select * from table'
-        analysis.non_flagged_queries.first[:rows].should == 2
+    context "select statements" do
+      before :each do
+        SqlSafetyNet::TestModel.create!(:name => "foo", :value => 100)
       end
       
-      it "should flag queries that exceed the configured time limit" do
-        now = Time.now
-        analysis = SqlSafetyNet::QueryAnalysis.analyze do
-          Time.stub(:now).and_return(now, now + 100)
-          connection.send(select_method, 'Select * from table')
+      it "should analyze select statements" do
+        SqlSafetyNet::QueryAnalysis.capture do |analysis|
+          results = connection.send(:select, "select name, value from test_models order by name")
+          results.should == [{"name" => "foo", "value" => 100}, {"name" => "test", "value" => 10}]
+          analysis.queries.size.should == 1
+          query_info = analysis.queries.first
+          query_info.sql.should == "select name, value from test_models order by name"
+          query_info.rows.should == 2
+          query_info.result_size.should == 12
+          query_info.elapsed_time.should > 0
         end
-        analysis.flagged_queries.size.should == 1
-        analysis.non_flagged_queries.size.should == 0
-        analysis.flagged_queries.first[:flags].should == ["query time exceeded #{SqlSafetyNet.config.time_limit} ms"]
       end
-
-      it "should not analyze queries if debug mode disabled" do
-        SqlSafetyNet.config.debug = false
-        analysis = SqlSafetyNet::QueryAnalysis.analyze do
-          connection.send(select_method, 'SELECT * from table with table scan')
+      
+      # ActiveRecord < 3.1 doesn't have the binds parameter
+      if ActiveRecord::VERSION::MAJOR > 3 || (ActiveRecord::VERSION::MAJOR == 3 && ActiveRecord::VERSION::MINOR >= 1)
+        it "should analyze select statements using bind variables" do
+          SqlSafetyNet::QueryAnalysis.capture do |analysis|
+            name_column = SqlSafetyNet::TestModel.columns_hash["name"]
+            results = connection.send(:select, "select name, value from test_models where name = ? order by name", "SQL", [[name_column, "foo"]])
+            results.should == [{"name" => "foo", "value" => 100}]
+            analysis.queries.size.should == 1
+            query_info = analysis.queries.first
+            query_info.sql.should == 'select name, value from test_models where name = ? order by name [["name", "foo"]]'
+            query_info.rows.should == 1
+            query_info.result_size.should == 6
+            query_info.elapsed_time.should > 0
+          end
         end
-        analysis.selects.should == 1
-        analysis.rows.should == 2
-        analysis.flagged_queries.size.should == 0
-        analysis.non_flagged_queries.size.should == 0
+      end
+      
+      it "should analyze select_rows statements" do
+        SqlSafetyNet::QueryAnalysis.capture do |analysis|
+          results = connection.select_rows("select name, value from test_models order by name")
+          results.should == [["foo", 100], ["test", 10]]
+          analysis.queries.size.should == 1
+          query_info = analysis.queries.first
+          query_info.sql.should == "select name, value from test_models order by name"
+          query_info.rows.should == 2
+          query_info.result_size.should == 12
+          query_info.elapsed_time.should > 0
+        end
+      end
+    end
+    
+    context "non-select statements" do
+      it "should not analyze schema statements" do
+        SqlSafetyNet::QueryAnalysis.capture do |analysis|
+          results = connection.select_rows("INSERT INTO test_models (name, value) VALUES ('moo', 1)")
+          analysis.queries.should be_empty
+        end
+      end
+      
+      it "should not analyze explain statements" do
+        SqlSafetyNet::QueryAnalysis.capture do |analysis|
+          results = connection.select_rows("EXPLAIN select * from test_models")
+          analysis.queries.should be_empty
+        end
+      end
+      
+      it "should not analyze insert statements" do
+        SqlSafetyNet::QueryAnalysis.capture do |analysis|
+          results = connection.select_rows("INSERT INTO test_models (name, value) VALUES ('moo', 1)")
+          analysis.queries.should be_empty
+        end
+      end
+      
+      it "should not analyze update statements" do
+        SqlSafetyNet::QueryAnalysis.capture do |analysis|
+          results = connection.select_rows("UPDATE test_models SET value = 1 WHERE value = 10")
+          analysis.queries.should be_empty
+        end
+      end
+      
+      it "should not analyze delete statements" do
+        SqlSafetyNet::QueryAnalysis.capture do |analysis|
+          results = connection.select_rows("DELETE FROM test_models WHERE id = 1")
+          analysis.queries.should be_empty
+        end
       end
     end
   end
-
+  
+  describe "ActiveRecord finders" do
+    it "should analyze the queries" do
+      SqlSafetyNet::QueryAnalysis.capture do |analysis|
+        model = SqlSafetyNet::TestModel.all.first
+        SqlSafetyNet::TestModel.find(model.id)
+        analysis.total_queries.should == 2
+      end
+    end
+  end
+  
+  describe "explain plan analysis" do
+    it "should do further analysis on queries when the adapter support query plan analysis" do
+      connection.should_receive(:respond_to?).with(:sql_safety_net_analyze_query_plan).and_return(true)
+      connection.should_receive(:sql_safety_net_analyze_query_plan).with("SELECT * from test_models", []).and_return(["table scan"])
+      
+      SqlSafetyNet::QueryAnalysis.capture do |analysis|
+        model = connection.select_all("SELECT * from test_models")
+        analysis.queries.first.alerts.should == ["table scan"]
+      end
+    end
+  end
+  
 end

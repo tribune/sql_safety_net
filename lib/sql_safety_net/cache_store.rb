@@ -1,18 +1,28 @@
 module SqlSafetyNet
-  # Hook into ActiveSupport::Cache to set a caching flag on the QueryAnalysis whenever +fetch+ is called with a block.
+  # This module provides a hook into ActiveSupport::Cache::Store caches to keep
+  # track of when a query happens inside a cache fetch block. This will be reported
+  # in the analysis.
   module CacheStore
-    def self.included(base)
-      base.alias_method_chain(:fetch, :sql_safety_net)
+    extend ActiveSupport::Concern
+    
+    included do
+      alias_method_chain :fetch, :sql_safety_net
     end
     
     def fetch_with_sql_safety_net(*args, &block)
-      analysis = QueryAnalysis.current
-      saved_val = analysis.caching? if analysis
+      save_val = Thread.current[:sql_safety_net_in_cache_store_fetch_block]
       begin
-        analysis.caching = true if analysis
+        Thread.current[:sql_safety_net_in_cache_store_fetch_block] = true
         fetch_without_sql_safety_net(*args, &block)
       ensure
-        analysis.caching = saved_val if analysis
+        Thread.current[:sql_safety_net_in_cache_store_fetch_block] = save_val
+      end
+    end
+    
+    class << self
+      # Return +true+ if called from within a +fetch+ block.
+      def in_fetch_block?
+        !!Thread.current[:sql_safety_net_in_cache_store_fetch_block]
       end
     end
   end

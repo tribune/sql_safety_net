@@ -1,103 +1,72 @@
 module SqlSafetyNet
-  # Logic to be mixed into connection adapters allowing them to analyze queries.
+  # This module needs to be included with the specific ActiveRecord::ConnectionAdapter class
+  # to collect data about all SELECT queries.
   module ConnectionAdapter
-    autoload :MysqlAdapter, File.expand_path('../connection_adapter/mysql_adapter', __FILE__)
-    autoload :PostgreSQLAdapter, File.expand_path('../connection_adapter/postgresql_adapter', __FILE__)
-    
-    SELECT_STATEMENT = /^\s*SELECT\b/i
-    
-    def self.included(base)
-      base.alias_method_chain :select, :sql_safety_net
-      base.alias_method_chain :select_rows, :sql_safety_net
-      base.alias_method_chain :columns, :sql_safety_net
-      base.alias_method_chain :active?, :sql_safety_net
-    end
-    
-    def active_with_sql_safety_net?
-      active = disable_sql_safety_net{active_without_sql_safety_net?}
-      if @logger && !active
-        @logger.warn("#{adapter_name} connection not active")
-      end
-      active
-    end
+    extend ActiveSupport::Concern
 
-    def columns_with_sql_safety_net(table_name, name = nil)
-      disable_sql_safety_net do
-        columns_without_sql_safety_net(table_name, name)
-      end
+    SELECT_SQL_PATTERN = /\A\s*SELECT\b/im.freeze
+    IGNORED_PAYLOADS = %w(SCHEMA EXPLAIN CACHE).freeze
+    
+    included do
+      alias_method_chain :select_rows, :sql_safety_net
+      alias_method_chain :select, :sql_safety_net
     end
     
     def select_rows_with_sql_safety_net(sql, name = nil, *args)
-      analyze_sql_safety_net_query(sql, name, *args) do
+      analyze_query(sql, name, []) do
         select_rows_without_sql_safety_net(sql, name, *args)
       end
     end
     
-    # Disable query analysis within a block.
-    def disable_sql_safety_net
-      save_disabled = Thread.current[:sql_safety_net_disable]
-      begin
-        Thread.current[:sql_safety_net_disable] = true
-        yield
-      ensure
-        Thread.current[:sql_safety_net_disable] = save_disabled
-      end
-    end
-    
-    def analyze_query(sql, *args)
-      # No op; other modules may redefine to analyze query plans
-    end
-    
-    def select_statement?(sql)
-      !!sql.match(SELECT_STATEMENT)
-    end
-    
     protected
-
+    
     def select_with_sql_safety_net(sql, name = nil, *args)
-      analyze_sql_safety_net_query(sql, name, *args) do
+      binds = args.first || []
+      analyze_query(sql, name, binds) do
         select_without_sql_safety_net(sql, name, *args)
       end
     end
     
-    private
     
-    def analyze_sql_safety_net_query(sql, name, *args)
-      if Thread.current[:sql_safety_net_disable]
-        yield
+    def analyze_query(sql, name, binds)
+      queries = QueryAnalysis.current
+      if queries && sql.match(SELECT_SQL_PATTERN) && !IGNORED_PAYLOADS.include?(name)
+        start_time = Time.now
+        results = yield
+        elapsed_time = Time.now - start_time
+        
+        expanded_sql = sql
+        unless binds.empty?
+          sql = "#{sql} #{binds.collect{|col, val| [col.name, val]}.inspect}"
+        end
+        rows = results.size
+        result_size = 0
+        results.each do |row|
+          values = row.is_a?(Hash) ? row.values : row
+          values.each{|val| result_size += val.to_s.size if val}
+        end
+        cached = CacheStore.in_fetch_block?
+        sql_str = nil
+        if method(:to_sql).arity == 1
+          sql_str = (sql.is_a?(String) ? sql : to_sql(sql))
+        else
+          sql_str = to_sql(sql, binds)
+        end
+        query_info = QueryInfo.new(sql_str, :elapsed_time => elapsed_time, :rows => rows, :result_size => result_size, :cached => cached)
+        queries << query_info
+        
+        # If connection includes a query plan analyzer then alert on issues in the query plan.
+        if respond_to?(:sql_safety_net_analyze_query_plan)
+          query_info.alerts.concat(sql_safety_net_analyze_query_plan(sql, binds))
+        end
+        
+        query_info.alerts.each{|alert| ActiveRecord::Base.logger.debug(alert)} if ActiveRecord::Base.logger
+        
+        results
       else
-        t = Time.now.to_f
-        query_results = nil
-        disable_sql_safety_net do
-          query_results = yield
-        end
-        elapsed_time = Time.now.to_f - t
-      
-        unless Thread.current[:sql_safety_net_disable]
-          query_info = Thread.current[:sql_safety_net_query_info]
-          if query_info
-            query_info.count += 1
-            query_info.selects += query_results.size
-          end
-          analysis = QueryAnalysis.current
-          if analysis
-            analysis.selects += 1
-            analysis.rows += query_results.size
-            analysis.elapsed_time += elapsed_time
-            if SqlSafetyNet.config.debug?
-              flagged = (@logger ? @logger.silence{analyze_query(sql, name, *args)} : analyze_query(sql, name, *args))
-              if elapsed_time * 1000 >= SqlSafetyNet.config.time_limit
-                flagged ||= {}
-                flagged[:flags] ||= []
-                flagged[:flags] << "query time exceeded #{SqlSafetyNet.config.time_limit} ms"
-              end
-              analysis.add_query(sql, name, query_results.size, elapsed_time, flagged)
-            end
-          end
-        end
-
-        query_results
+        yield
       end
     end
+    
   end
 end
