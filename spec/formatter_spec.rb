@@ -9,7 +9,7 @@ describe SqlSafetyNet::Formatter do
     analysis << query_info
     formatter = SqlSafetyNet::Formatter.new(analysis)
     html = formatter.to_html
-    html.should match(/<div id="_sql_safety_net_"/)
+    html.should match(/<div [^>]*id="_sql_safety_net_"/)
     parsed = ActiveSupport::XmlMini.parse(html)
     parsed["div"]["id"].should == "_sql_safety_net_"
   end
