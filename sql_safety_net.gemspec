@@ -9,7 +9,7 @@ Gem::Specification.new do |s|
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Brian Durand"]
-  s.date = "2012-06-12"
+  s.date = "2012-06-14"
   s.description = "Debug SQL statements in ActiveRecord by displaying warnings on bad queries."
   s.email = ["mdobrota@tribune.com", "ddpr@tribune.com"]
   s.extra_rdoc_files = [
