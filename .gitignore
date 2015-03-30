@@ -1,3 +1,8 @@
+Gemfile.lock
+*.swm
+*.swn
+*.swo
 *.swp
 *.gem
 coverage
+pkg

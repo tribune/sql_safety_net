@@ -1,7 +1,6 @@
 require 'rubygems'
 
 active_record_version = ENV['ACTIVE_RECORD_VERSION'] || ">=3.2.0"
-gem 'rails', active_record_version
 gem 'activerecord', active_record_version
 gem 'activesupport', active_record_version
 require 'active_support/all'
