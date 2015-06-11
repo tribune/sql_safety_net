@@ -1,8 +1,10 @@
-Gemfile.lock
 *.swm
 *.swn
 *.swo
 *.swp
 *.gem
-coverage
-pkg
+/Gemfile.lock
+/gemfiles/*.lock
+/.bundle
+/coverage
+/pkg
