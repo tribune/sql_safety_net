@@ -1,6 +1,10 @@
 require 'spec_helper'
 
 describe SqlSafetyNet::ConnectionAdapter do
+  # ActiveRecord 4's conn.select returns an ActiveRecord::Result. This normalizes it so we can test on both AR 3.2 & 4.x
+  def hashify_select_result(results)
+    results.respond_to?(:to_hash) ? results.to_hash : results
+  end
   
   let(:connection){ SqlSafetyNet::TestModel.connection }
   
@@ -17,7 +21,9 @@ describe SqlSafetyNet::ConnectionAdapter do
     
     it "should analyze queries in the select method" do
       connection.should_receive(:analyze_query).with("select name, value from test_models", "SQL", []).and_yield
-      connection.send(:select, "select name, value from test_models", "SQL").should == [{"name"=>"test", "value"=>10}]
+      hashify_select_result(
+        connection.send(:select, "select name, value from test_models", "SQL")
+      ).should == [{"name"=>"test", "value"=>10}]
     end
   end
   
@@ -34,7 +40,7 @@ describe SqlSafetyNet::ConnectionAdapter do
       it "should analyze select statements" do
         SqlSafetyNet::QueryAnalysis.capture do |analysis|
           results = connection.send(:select, "select name, value from test_models order by name")
-          results.should == [{"name" => "foo", "value" => 100}, {"name" => "test", "value" => 10}]
+          hashify_select_result(results).should == [{"name" => "foo", "value" => 100}, {"name" => "test", "value" => 10}]
           analysis.queries.size.should == 1
           query_info = analysis.queries.first
           query_info.sql.should == "select name, value from test_models order by name"
@@ -44,20 +50,17 @@ describe SqlSafetyNet::ConnectionAdapter do
         end
       end
       
-      # ActiveRecord < 3.1 doesn't have the binds parameter
-      if ActiveRecord::VERSION::MAJOR > 3 || (ActiveRecord::VERSION::MAJOR == 3 && ActiveRecord::VERSION::MINOR >= 1)
-        it "should analyze select statements using bind variables" do
-          SqlSafetyNet::QueryAnalysis.capture do |analysis|
-            name_column = SqlSafetyNet::TestModel.columns_hash["name"]
-            results = connection.send(:select, "select name, value from test_models where name = ? order by name", "SQL", [[name_column, "foo"]])
-            results.should == [{"name" => "foo", "value" => 100}]
-            analysis.queries.size.should == 1
-            query_info = analysis.queries.first
-            query_info.sql.should == 'select name, value from test_models where name = ? order by name [["name", "foo"]]'
-            query_info.rows.should == 1
-            query_info.result_size.should == 6
-            query_info.elapsed_time.should > 0
-          end
+      it "should analyze select statements using bind variables" do
+        SqlSafetyNet::QueryAnalysis.capture do |analysis|
+          name_column = SqlSafetyNet::TestModel.columns_hash["name"]
+          results = connection.send(:select, "select name, value from test_models where name = ? order by name", "SQL", [[name_column, "foo"]])
+          hashify_select_result(results).should == [{"name" => "foo", "value" => 100}]
+          analysis.queries.size.should == 1
+          query_info = analysis.queries.first
+          query_info.sql.should == 'select name, value from test_models where name = ? order by name [["name", "foo"]]'
+          query_info.rows.should == 1
+          query_info.result_size.should == 6
+          query_info.elapsed_time.should > 0
         end
       end
       

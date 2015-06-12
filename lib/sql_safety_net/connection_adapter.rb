@@ -33,15 +33,17 @@ module SqlSafetyNet
       if queries && sql.match(SELECT_SQL_PATTERN) && !IGNORED_PAYLOADS.include?(name)
         start_time = Time.now
         results = yield
+        # In Rails 4, results may be an ActiveRecord::Result
+        result_hashes = results.respond_to?(:to_hash) ? results.to_hash : results
         elapsed_time = Time.now - start_time
         
         expanded_sql = sql
         unless binds.empty?
           sql = "#{sql} #{binds.collect{|col, val| [col.name, val]}.inspect}"
         end
-        rows = results.size
+        row_count = result_hashes.size
         result_size = 0
-        results.each do |row|
+        result_hashes.each do |row|
           values = row.is_a?(Hash) ? row.values : row
           values.each{|val| result_size += val.to_s.size if val}
         end
@@ -52,7 +54,7 @@ module SqlSafetyNet
         else
           sql_str = to_sql(sql, binds)
         end
-        query_info = QueryInfo.new(sql_str, :elapsed_time => elapsed_time, :rows => rows, :result_size => result_size, :cached => cached)
+        query_info = QueryInfo.new(sql_str, :elapsed_time => elapsed_time, :rows => row_count, :result_size => result_size, :cached => cached)
         queries << query_info
         
         # If connection includes a query plan analyzer then alert on issues in the query plan.
