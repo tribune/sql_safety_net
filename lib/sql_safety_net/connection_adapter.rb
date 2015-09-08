@@ -33,13 +33,12 @@ module SqlSafetyNet
       if queries && sql.match(SELECT_SQL_PATTERN) && !IGNORED_PAYLOADS.include?(name)
         start_time = Time.now
         results = yield
-        # In Rails 4, results may be an ActiveRecord::Result
-        result_hashes = results.respond_to?(:to_hash) ? results.to_hash : results
         elapsed_time = Time.now - start_time
         
-        row_count = result_hashes.size
+        # In Rails 4, results is an ActiveRecord::Result, so use #count
+        row_count = results.count
         result_size = 0
-        result_hashes.each do |row|
+        results.each do |row|
           values = row.is_a?(Hash) ? row.values : row
           values.each{|val| result_size += val.to_s.size if val}
         end
