@@ -1,7 +1,4 @@
-*.swm
-*.swn
-*.swo
-*.swp
+*.sw[mnop]
 *.gem
 /Gemfile.lock
 /gemfiles/*.lock

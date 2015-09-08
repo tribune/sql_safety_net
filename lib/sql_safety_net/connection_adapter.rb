@@ -37,10 +37,6 @@ module SqlSafetyNet
         result_hashes = results.respond_to?(:to_hash) ? results.to_hash : results
         elapsed_time = Time.now - start_time
         
-        expanded_sql = sql
-        unless binds.empty?
-          sql = "#{sql} #{binds.collect{|col, val| [col.name, val]}.inspect}"
-        end
         row_count = result_hashes.size
         result_size = 0
         result_hashes.each do |row|
@@ -48,18 +44,16 @@ module SqlSafetyNet
           values.each{|val| result_size += val.to_s.size if val}
         end
         cached = CacheStore.in_fetch_block?
-        sql_str = nil
-        if method(:to_sql).arity == 1
-          sql_str = (sql.is_a?(String) ? sql : to_sql(sql))
-        else
-          sql_str = to_sql(sql, binds)
-        end
-        query_info = QueryInfo.new(sql_str, :elapsed_time => elapsed_time, :rows => row_count, :result_size => result_size, :cached => cached)
+
+        exec_sql = get_executable_sql(sql, binds)
+
+        query_info = QueryInfo.new(append_binds(exec_sql, binds), :elapsed_time => elapsed_time,
+                                   :rows => row_count, :result_size => result_size, :cached => cached)
         queries << query_info
         
         # If connection includes a query plan analyzer then alert on issues in the query plan.
         if respond_to?(:sql_safety_net_analyze_query_plan)
-          query_info.alerts.concat(sql_safety_net_analyze_query_plan(sql, binds))
+          query_info.alerts.concat(sql_safety_net_analyze_query_plan(exec_sql, binds))
         end
         
         query_info.alerts.each{|alert| ActiveRecord::Base.logger.debug(alert)} if ActiveRecord::Base.logger
@@ -69,6 +63,25 @@ module SqlSafetyNet
         yield
       end
     end
-    
+
+    def get_executable_sql(sql, binds)
+      # In rails 3.1+, to_sql can accept an Arel AST and convert it to sql, but this should never
+      #  happen; sql will always be a String otherwise the sql.match in analyze_query would fail.
+      # What is this arity check for?
+      if method(:to_sql).arity == 1
+        sql.is_a?(String) ? sql : to_sql(sql)
+      else
+        to_sql(sql, binds)
+      end
+    end
+
+    # the returned string is for display only; it's not valid sql
+    def append_binds(sql_str, binds)
+      if binds.empty?
+        sql_str
+      else
+        "#{sql_str} #{binds.map {|col, val| [col.name, val] }.inspect}"
+      end
+    end
   end
 end
