@@ -45,15 +45,13 @@ module SqlSafetyNet
         end
         cached = CacheStore.in_fetch_block?
 
-        exec_sql = get_executable_sql(sql, binds)
-
-        query_info = QueryInfo.new(append_binds(exec_sql, binds), :elapsed_time => elapsed_time,
+        query_info = QueryInfo.new(append_binds(sql, binds), :elapsed_time => elapsed_time,
                                    :rows => row_count, :result_size => result_size, :cached => cached)
         queries << query_info
         
         # If connection includes a query plan analyzer then alert on issues in the query plan.
         if respond_to?(:sql_safety_net_analyze_query_plan)
-          query_info.alerts.concat(sql_safety_net_analyze_query_plan(exec_sql, binds))
+          query_info.alerts.concat(sql_safety_net_analyze_query_plan(sql, binds))
         end
         
         query_info.alerts.each{|alert| ActiveRecord::Base.logger.debug(alert)} if ActiveRecord::Base.logger
@@ -61,17 +59,6 @@ module SqlSafetyNet
         results
       else
         yield
-      end
-    end
-
-    def get_executable_sql(sql, binds)
-      # In rails 3.1+, to_sql can accept an Arel AST and convert it to sql, but this should never
-      #  happen; sql will always be a String otherwise the sql.match in analyze_query would fail.
-      # What is this arity check for?
-      if method(:to_sql).arity == 1
-        sql.is_a?(String) ? sql : to_sql(sql)
-      else
-        to_sql(sql, binds)
       end
     end
 
