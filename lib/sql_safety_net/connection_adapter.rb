@@ -35,24 +35,17 @@ module SqlSafetyNet
         results = yield
         elapsed_time = Time.now - start_time
         
-        expanded_sql = sql
-        unless binds.empty?
-          sql = "#{sql} #{binds.collect{|col, val| [col.name, val]}.inspect}"
-        end
-        rows = results.size
+        # In Rails 4, results is an ActiveRecord::Result, so use #count
+        row_count = results.count
         result_size = 0
         results.each do |row|
           values = row.is_a?(Hash) ? row.values : row
           values.each{|val| result_size += val.to_s.size if val}
         end
         cached = CacheStore.in_fetch_block?
-        sql_str = nil
-        if method(:to_sql).arity == 1
-          sql_str = (sql.is_a?(String) ? sql : to_sql(sql))
-        else
-          sql_str = to_sql(sql, binds)
-        end
-        query_info = QueryInfo.new(sql_str, :elapsed_time => elapsed_time, :rows => rows, :result_size => result_size, :cached => cached)
+
+        query_info = QueryInfo.new(append_binds(sql, binds), :elapsed_time => elapsed_time,
+                                   :rows => row_count, :result_size => result_size, :cached => cached)
         queries << query_info
         
         # If connection includes a query plan analyzer then alert on issues in the query plan.
@@ -67,6 +60,14 @@ module SqlSafetyNet
         yield
       end
     end
-    
+
+    # the returned string is for display only; it's not valid sql
+    def append_binds(sql_str, binds)
+      if binds.empty?
+        sql_str
+      else
+        "#{sql_str} #{binds.map {|col, val| [col.name, val] }.inspect}"
+      end
+    end
   end
 end

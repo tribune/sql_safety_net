@@ -1,11 +1,5 @@
-require 'rubygems'
-
-active_record_version = ENV['ACTIVE_RECORD_VERSION'] || ">=3.2.0"
-gem 'activerecord', active_record_version
-gem 'activesupport', active_record_version
 require 'active_support/all'
 require 'active_record'
-puts "Testing against activerecord #{ActiveRecord::VERSION::STRING}"
 
 begin
   require 'simplecov'
